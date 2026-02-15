@@ -29,14 +29,17 @@ public class McpStdioServer implements CommandLineRunner {
     private final TimeTools timeTools;
     private final UserTools userTools;
     private final CryptoTools cryptoTools;
+    private final SystemLogTools systemLogTools;
 
     public McpStdioServer(CalculatorTools calculatorTools, StringTools stringTools,
-                          TimeTools timeTools, UserTools userTools, CryptoTools cryptoTools) {
+                          TimeTools timeTools, UserTools userTools, CryptoTools cryptoTools,
+                          SystemLogTools systemLogTools) {
         this.calculatorTools = calculatorTools;
         this.stringTools = stringTools;
         this.timeTools = timeTools;
         this.userTools = userTools;
         this.cryptoTools = cryptoTools;
+        this.systemLogTools = systemLogTools;
         registerTools();
     }
 
@@ -46,6 +49,7 @@ public class McpStdioServer implements CommandLineRunner {
         registerToolObject(timeTools);
         registerToolObject(userTools);
         registerToolObject(cryptoTools);
+        registerToolObject(systemLogTools);
     }
 
     private void registerToolObject(Object toolObj) {
