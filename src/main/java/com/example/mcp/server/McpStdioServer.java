@@ -14,7 +14,7 @@ import java.util.concurrent.*;
 
 /**
  * MCP 协议服务器
- * 通过 stdio 与 Claude 通信
+ * 通过 stdio 与 Claude 通信.
  */
 @Component
 @ConditionalOnProperty(name = "mcp.server.enabled", havingValue = "true")
