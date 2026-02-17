@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * 系统日志工具集
- * 提供氧屋系统问题日志查询和保存功能
+ * 提供氧屋系统问题日志查询、保存和更新功能
  */
 @Component
 public class SystemLogTools {
@@ -100,6 +100,37 @@ public class SystemLogTools {
         } catch (Exception e) {
             log.error("保存问题日志失败", e);
             return "保存失败：" + e.getMessage();
+        }
+    }
+
+    @Tool(description = "更新系统问题日志的状态和描述")
+    public String updateSystemLog(
+        @ToolParam(description = "问题日志ID") String id,
+        @ToolParam(description = "状态：1.待处理 2.处理中 3.已完成 4.处理失败") Integer status,
+        @ToolParam(description = "问题详细描述（非必填，不传则不更新）") String description
+    ) {
+        log.info("更新系统问题日志, id={}, status={}", id, status);
+
+        try {
+            int rows;
+            if (description != null) {
+                // 同时更新 status 和 description
+                String sql = "UPDATE system_issue_log SET status = ?, description = ? WHERE id = ?";
+                rows = jdbcTemplate.update(sql, status, description, id);
+            } else {
+                // 只更新 status
+                String sql = "UPDATE system_issue_log SET status = ? WHERE id = ?";
+                rows = jdbcTemplate.update(sql, status, id);
+            }
+
+            if (rows > 0) {
+                return "更新成功，影响记录数: " + rows;
+            } else {
+                return "更新失败：未找到ID为 " + id + " 的记录";
+            }
+        } catch (Exception e) {
+            log.error("更新问题日志失败", e);
+            return "更新失败：" + e.getMessage();
         }
     }
 
