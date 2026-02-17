@@ -5,9 +5,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.UUID;
+
 /**
  * 系统日志工具集
- * 提供氧屋系统问题日志查询功能
+ * 提供氧屋系统问题日志查询和保存功能
  */
 @Component
 public class SystemLogTools {
@@ -22,14 +25,28 @@ public class SystemLogTools {
     @Tool(description = "获取氧屋系统最早的1条问题日志")
     public String getSystemLog() {
         log.info("查询最早的待处理问题日志");
-        String sql = "SELECT description, remark FROM system_issue_log " +
-                     "WHERE status = 1 ORDER BY created_at ASC LIMIT 1";
+
+        String issueLogSql = "SELECT id, type, create_table_sql, before_transformation, " +
+                             "transformation, business_context, status " +
+                             "FROM system_issue_log WHERE status = 1 ORDER BY created_at ASC LIMIT 1";
+
         try {
-            return jdbcTemplate.query(sql, rs -> {
+            return jdbcTemplate.query(issueLogSql, rs -> {
                 if (rs.next()) {
-                    String description = rs.getString("description");
-                    String remark = rs.getString("remark");
-                    return String.format("描述信息为：%s，备注信息为%s。", description, remark);
+                    String id = rs.getString("id");
+                    String type = rs.getString("type");
+                    String createTableSql = rs.getString("create_table_sql");
+                    String beforeTransformation = rs.getString("before_transformation");
+                    String transformation = rs.getString("transformation");
+                    String businessContext = rs.getString("business_context");
+                    String status = rs.getString("status");
+
+                    // 查询关联的附件
+                    List<String> attachmentPaths = queryAttachmentPaths(id);
+
+                    // 构建返回结果
+                    return buildResultXml(type, createTableSql, beforeTransformation,
+                                          transformation, businessContext, status, attachmentPaths);
                 }
                 return "未找到待处理的问题日志。";
             });
@@ -37,5 +54,118 @@ public class SystemLogTools {
             log.error("查询问题日志失败", e);
             return "查询失败：" + e.getMessage();
         }
+    }
+
+    @Tool(description = "保存系统问题日志到数据库")
+    public String saveSystemLog(
+        @ToolParam(description = "类型：1.bug修复 2.新功能开发 3.原有功能改造 4.页面原型快速实现") Integer type,
+        @ToolParam(description = "问题详细描述") String description,
+        @ToolParam(description = "备注") String remark,
+        @ToolParam(description = "SQL建表语句") String createTableSql,
+        @ToolParam(description = "新需求描述") String newRequirement,
+        @ToolParam(description = "改造前功能描述") String beforeTransformation,
+        @ToolParam(description = "改造后的目标") String transformation,
+        @ToolParam(description = "业务介绍") String businessContext,
+        @ToolParam(description = "创建人") String creator
+    ) {
+        log.info("保存系统问题日志, type={}, creator={}", type, creator);
+
+        // 生成UUID作为主键
+        String id = UUID.randomUUID().toString();
+
+        String sql = "INSERT INTO system_issue_log " +
+                     "(id, type, description, remark, create_table_sql, new_requirement, " +
+                     "before_transformation, transformation, business_context, status, creator) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)";
+
+        try {
+            int rows = jdbcTemplate.update(sql,
+                id,
+                type,
+                description,
+                remark,
+                createTableSql,
+                newRequirement,
+                beforeTransformation,
+                transformation,
+                businessContext,
+                creator
+            );
+
+            if (rows > 0) {
+                return "保存成功，ID: " + id;
+            } else {
+                return "保存失败：未插入任何记录";
+            }
+        } catch (Exception e) {
+            log.error("保存问题日志失败", e);
+            return "保存失败：" + e.getMessage();
+        }
+    }
+
+    /**
+     * 查询关联的附件路径列表
+     * @param targetId 关联的目标ID (system_issue_log的id)
+     * @return 附件路径列表
+     */
+    private List<String> queryAttachmentPaths(String targetId) {
+        String attachmentSql = "SELECT file_path FROM sys_attachment " +
+                               "WHERE target_type = 'system_issue_log' " +
+                               "AND target_id = ? AND deleted = 0 " +
+                               "ORDER BY sort_order ASC";
+
+        return jdbcTemplate.query(attachmentSql,
+            ps -> ps.setString(1, targetId),
+            (rs, rowNum) -> rs.getString("file_path"));
+    }
+
+    /**
+     * 构建 XML 格式的返回结果
+     */
+    private String buildResultXml(String type, String createTableSql, String beforeTransformation,
+                                  String transformation, String businessContext, String status,
+                                  List<String> attachmentPaths) {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("<type>\n");
+        sb.append(nullToEmpty(type));
+        sb.append("\n</type>\n");
+
+        sb.append("<createTableSql>\n");
+        sb.append(nullToEmpty(createTableSql));
+        sb.append("\n</createTableSql>\n");
+
+        sb.append("<beforeTransformation>\n");
+        sb.append(nullToEmpty(beforeTransformation));
+        sb.append("\n</beforeTransformation>\n");
+
+        sb.append("<transformation>\n");
+        sb.append(nullToEmpty(transformation));
+        sb.append("\n</transformation>\n");
+
+        sb.append("<businessContext>\n");
+        sb.append(nullToEmpty(businessContext));
+        sb.append("\n</businessContext>\n");
+
+        sb.append("<status>\n");
+        sb.append(nullToEmpty(status));
+        sb.append("\n</status>\n");
+
+        sb.append("<attachmentPaths>\n");
+        for (String path : attachmentPaths) {
+            sb.append(" <attachmentPath>\n");
+            sb.append(" ").append(nullToEmpty(path)).append("\n");
+            sb.append(" </attachmentPath>\n");
+        }
+        sb.append("</attachmentPaths>");
+
+        return sb.toString();
+    }
+
+    /**
+     * 空值转换为空字符串
+     */
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 }
