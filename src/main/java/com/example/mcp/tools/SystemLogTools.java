@@ -27,7 +27,7 @@ public class SystemLogTools {
         log.info("查询最早的待处理问题日志");
 
         String issueLogSql = "SELECT id, type, create_table_sql, before_transformation, " +
-                             "transformation, business_context, status " +
+                             "transformation, business_context, status, new_requirement " +
                              "FROM system_issue_log WHERE status = 1 ORDER BY created_at ASC LIMIT 1";
 
         try {
@@ -40,13 +40,14 @@ public class SystemLogTools {
                     String transformation = rs.getString("transformation");
                     String businessContext = rs.getString("business_context");
                     String status = rs.getString("status");
+                    String newRequirement = rs.getString("new_requirement");
 
                     // 查询关联的附件
                     List<String> attachmentPaths = queryAttachmentPaths(id);
 
                     // 构建返回结果
                     return buildResultXml(id, type, createTableSql, beforeTransformation,
-                                          transformation, businessContext, status, attachmentPaths);
+                                          transformation, businessContext, status, newRequirement, attachmentPaths);
                 }
                 return "未找到待处理的问题日志。";
             });
@@ -199,7 +200,7 @@ public class SystemLogTools {
      */
     private String buildResultXml(String id, String type, String createTableSql, String beforeTransformation,
                                   String transformation, String businessContext, String status,
-                                  List<String> attachmentPaths) {
+                                  String newRequirement, List<String> attachmentPaths) {
         StringBuilder sb = new StringBuilder();
 
         sb.append("<referenceInfo>\n");
@@ -215,6 +216,10 @@ public class SystemLogTools {
         sb.append("    <createTableSql>\n");
         sb.append("    ").append(nullToEmpty(createTableSql)).append("\n");
         sb.append("    </createTableSql>\n");
+
+        sb.append("    <newRequirement>\n");
+        sb.append("    ").append(nullToEmpty(newRequirement)).append("\n");
+        sb.append("    </newRequirement>\n");
 
         sb.append("    <beforeTransformation>\n");
         sb.append("    ").append(nullToEmpty(beforeTransformation)).append("\n");
