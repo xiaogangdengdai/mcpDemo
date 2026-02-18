@@ -45,7 +45,7 @@ public class SystemLogTools {
                     List<String> attachmentPaths = queryAttachmentPaths(id);
 
                     // 构建返回结果
-                    return buildResultXml(type, createTableSql, beforeTransformation,
+                    return buildResultXml(id, type, createTableSql, beforeTransformation,
                                           transformation, businessContext, status, attachmentPaths);
                 }
                 return "未找到待处理的问题日志。";
@@ -134,6 +134,51 @@ public class SystemLogTools {
         }
     }
 
+    @Tool(description = "保存系统附件信息到数据库")
+    public String saveSystemAttachment(
+        @ToolParam(description = "关联的目标ID") String targetId,
+        @ToolParam(description = "文件路径") String filePath,
+        @ToolParam(description = "文件名称") String fileName,
+        @ToolParam(description = "排序顺序，默认为0") Integer sortOrder
+    ) {
+        log.info("保存系统附件, targetId={}, fileName={}", targetId, fileName);
+
+        // 生成UUID作为主键
+        String id = UUID.randomUUID().toString();
+
+        // type 固定为 2
+        Integer type = 2;
+
+        // 如果 sortOrder 为 null，默认为 0
+        if (sortOrder == null) {
+            sortOrder = 0;
+        }
+
+        String sql = "INSERT INTO sys_attachment " +
+                     "(id, target_id, file_path, file_name, type, sort_order, created_at) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, NOW())";
+
+        try {
+            int rows = jdbcTemplate.update(sql,
+                id,
+                targetId,
+                filePath,
+                fileName,
+                type,
+                sortOrder
+            );
+
+            if (rows > 0) {
+                return "保存成功，附件ID: " + id;
+            } else {
+                return "保存失败：未插入任何记录";
+            }
+        } catch (Exception e) {
+            log.error("保存系统附件失败", e);
+            return "保存失败：" + e.getMessage();
+        }
+    }
+
     /**
      * 查询关联的附件路径列表
      * @param targetId 关联的目标ID (system_issue_log的id)
@@ -141,8 +186,7 @@ public class SystemLogTools {
      */
     private List<String> queryAttachmentPaths(String targetId) {
         String attachmentSql = "SELECT file_path FROM sys_attachment " +
-                               "WHERE target_type = 'system_issue_log' " +
-                               "AND target_id = ? AND deleted = 0 " +
+                               "WHERE target_id = ? AND type = 1 " +
                                "ORDER BY sort_order ASC";
 
         return jdbcTemplate.query(attachmentSql,
@@ -153,42 +197,50 @@ public class SystemLogTools {
     /**
      * 构建 XML 格式的返回结果
      */
-    private String buildResultXml(String type, String createTableSql, String beforeTransformation,
+    private String buildResultXml(String id, String type, String createTableSql, String beforeTransformation,
                                   String transformation, String businessContext, String status,
                                   List<String> attachmentPaths) {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("<type>\n");
-        sb.append(nullToEmpty(type));
-        sb.append("\n</type>\n");
+        sb.append("<referenceInfo>\n");
 
-        sb.append("<createTableSql>\n");
-        sb.append(nullToEmpty(createTableSql));
-        sb.append("\n</createTableSql>\n");
+        sb.append("    <id>\n");
+        sb.append("    ").append(nullToEmpty(id)).append("\n");
+        sb.append("    </id>\n");
 
-        sb.append("<beforeTransformation>\n");
-        sb.append(nullToEmpty(beforeTransformation));
-        sb.append("\n</beforeTransformation>\n");
+        sb.append("    <type>\n");
+        sb.append("    ").append(nullToEmpty(type)).append("\n");
+        sb.append("    </type>\n");
 
-        sb.append("<transformation>\n");
-        sb.append(nullToEmpty(transformation));
-        sb.append("\n</transformation>\n");
+        sb.append("    <createTableSql>\n");
+        sb.append("    ").append(nullToEmpty(createTableSql)).append("\n");
+        sb.append("    </createTableSql>\n");
 
-        sb.append("<businessContext>\n");
-        sb.append(nullToEmpty(businessContext));
-        sb.append("\n</businessContext>\n");
+        sb.append("    <beforeTransformation>\n");
+        sb.append("    ").append(nullToEmpty(beforeTransformation)).append("\n");
+        sb.append("    </beforeTransformation>\n");
 
-        sb.append("<status>\n");
-        sb.append(nullToEmpty(status));
-        sb.append("\n</status>\n");
+        sb.append("    <transformation>\n");
+        sb.append("    ").append(nullToEmpty(transformation)).append("\n");
+        sb.append("    </transformation>\n");
 
-        sb.append("<attachmentPaths>\n");
+        sb.append("    <businessContext>\n");
+        sb.append("    ").append(nullToEmpty(businessContext)).append("\n");
+        sb.append("    </businessContext>\n");
+
+        sb.append("    <status>\n");
+        sb.append("    ").append(nullToEmpty(status)).append("\n");
+        sb.append("    </status>\n");
+
+        sb.append("    <attachmentPaths>\n");
         for (String path : attachmentPaths) {
-            sb.append(" <attachmentPath>\n");
-            sb.append(" ").append(nullToEmpty(path)).append("\n");
-            sb.append(" </attachmentPath>\n");
+            sb.append("     <attachmentPath>\n");
+            sb.append("     ").append(nullToEmpty(path)).append("\n");
+            sb.append("     </attachmentPath>\n");
         }
-        sb.append("</attachmentPaths>");
+        sb.append("    </attachmentPaths>\n");
+
+        sb.append("</referenceInfo>");
 
         return sb.toString();
     }
